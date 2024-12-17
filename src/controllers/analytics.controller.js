@@ -5,7 +5,7 @@ const UAParser = require("ua-parser-js");
 
 const Redis = require("ioredis");
 
-const redis = new Redis();
+const redis = new Redis(process.env.REDIS_URL);
 
 const generateURLAnalytics = async (req, res) => {
   try {
