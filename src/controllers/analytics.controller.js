@@ -38,7 +38,7 @@ const retriveAnalytics = async (req, res) => {
 const recordClick = async (shortUrl, analyticsData, req, alias) => {
   const { ip, osName, deviceName, date } = analyticsData;
 
-  console.log(alias);
+  console.log(alias, ip);
 
   const geoData = await getGeoLocation(ip);
 
