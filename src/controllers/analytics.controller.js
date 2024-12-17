@@ -40,7 +40,7 @@ const recordClick = async (shortUrl, analyticsData, req, alias) => {
 
   console.log(alias, ip);
 
-  const geoData = await getGeoLocation(ip);
+  const geoData = await getGeoLocation(ip.ip);
 
   try {
     let analyticsDoc = await Analytics.findOne({ short_url: shortUrl });
