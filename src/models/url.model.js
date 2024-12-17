@@ -6,6 +6,7 @@ const urlSchema = new mongoose.Schema(
     custom_alias: { type: String, unique: true, sparse: true }, // Unique constraint for custom_alias
     short_url: { type: String, required: true }, // Make short_url required
     topic: { type: String },
+    ip_addr: { type: String },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User ",

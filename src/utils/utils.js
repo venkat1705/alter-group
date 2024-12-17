@@ -29,10 +29,9 @@ const getClientIP = (req) => {
   }
 
   // If behind a proxy like Nginx or Heroku, use the x-forwarded-for header
-  return (
-    req.headers["x-forwarded-for"] || // For proxies
-    ip
-  );
+  return {
+    ip: ip || req.headers["x-forwarded-for"],
+  };
 };
 
 module.exports = { generateShortId, getGeoLocation, getClientIP };
