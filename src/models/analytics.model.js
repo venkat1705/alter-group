@@ -6,6 +6,7 @@ const analyticsSchema = new mongoose.Schema(
     totalClicks: { type: Number, default: 0 }, // Total number of clicks
     uniqueClicks: { type: Number, default: 0 }, // Unique users who clicked
     alias: { type: String },
+    topic: { type: String },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

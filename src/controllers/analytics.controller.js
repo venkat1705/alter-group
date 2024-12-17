@@ -3,9 +3,24 @@ const URL = require("../models/url.model");
 const { getClientIP, getGeoLocation } = require("../utils/utils");
 const UAParser = require("ua-parser-js");
 
-const retriveAnalytics = async (req, res) => {
+const Redis = require("ioredis");
+
+const redis = new Redis();
+
+const generateURLAnalytics = async (req, res) => {
   try {
     const { alias } = req.params;
+
+    const cacheKey = `alter:analytics:generate:${alias}:${req.user._id}`;
+
+    const cachedResult = await redis.get(cacheKey);
+
+    if (cachedResult) {
+      // If cached result exists, return it
+      // console.log("Returning data from cache");
+
+      return res.json(JSON.parse(cachedResult));
+    }
 
     const urlDoc = await URL.findOne({ custom_alias: alias });
     if (!urlDoc) {
@@ -24,7 +39,22 @@ const retriveAnalytics = async (req, res) => {
       date: new Date().toISOString().slice(0, 10),
     };
 
-    await recordClick(urlDoc?.short_url, analyticsDoc, req, alias);
+    await recordClick(
+      urlDoc?.short_url,
+      analyticsDoc,
+      alias,
+      urlDoc?.topic,
+      urlDoc?.createdBy
+    );
+
+    await redis.set(
+      cacheKey,
+      JSON.stringify({
+        url: urlDoc.long_url,
+      }),
+      "EX",
+      3600
+    );
 
     return res.json({
       url: urlDoc.long_url,
@@ -35,7 +65,7 @@ const retriveAnalytics = async (req, res) => {
   }
 };
 
-const recordClick = async (shortUrl, analyticsData, req, alias) => {
+const recordClick = async (shortUrl, analyticsData, alias, topic, user_id) => {
   const { ip, osName, deviceName, date } = analyticsData;
 
   const geoData = await getGeoLocation(ip);
@@ -54,6 +84,8 @@ const recordClick = async (shortUrl, analyticsData, req, alias) => {
         osType: [{ osName, uniqueClicks: 1, uniqueUsers: 1 }],
         deviceType: [{ deviceName, uniqueClicks: 1, uniqueUsers: 1 }],
         alias: alias,
+        topic: topic,
+        createdBy: user_id,
         geoLocation: [
           {
             city: geoData?.city,
@@ -115,4 +147,195 @@ const recordClick = async (shortUrl, analyticsData, req, alias) => {
   }
 };
 
-module.exports = { retriveAnalytics };
+// retrieve analytics by alias
+
+const retrieveAnalytics = async (req, res) => {
+  const { alias } = req.params;
+
+  const cacheKey = `alter:analytics:alias:${alias}:${req.user._id}`;
+
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult) {
+    // If cached result exists, return it
+    // console.log("Returning data from cache");
+
+    return res.json(JSON.parse(cachedResult));
+  }
+
+  try {
+    const analyticsDoc = await Analytics.findOne({ alias });
+    if (!analyticsDoc) {
+      return res
+        .status(404)
+        .json({ error: "Analytics not found for this alias" });
+    }
+
+    await redis.set(
+      cacheKey,
+      JSON.stringify({
+        totalClicks: analyticsDoc.totalClicks,
+        uniqueClicks: analyticsDoc.uniqueClicks,
+        clicksByDate: analyticsDoc.clicksByDate.slice(0, 7), // recent 7 days
+        osType: analyticsDoc.osType,
+        deviceType: analyticsDoc.deviceType,
+      }),
+      "EX",
+      3600
+    );
+
+    return res.json({
+      totalClicks: analyticsDoc.totalClicks,
+      uniqueClicks: analyticsDoc.uniqueClicks,
+      clicksByDate: analyticsDoc.clicksByDate.slice(0, 7), // recent 7 days
+      osType: analyticsDoc.osType,
+      deviceType: analyticsDoc.deviceType,
+    });
+  } catch (error) {
+    console.error("Error retrieving analytics:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// retrieve analytics by topic
+
+const retrieveAnalyticsTopic = async (req, res) => {
+  const { topic } = req.params;
+
+  const cacheKey = `alter:analytics:topic:${topic}:${req.user._id}`;
+
+  const cachedResult = await redis.get(cacheKey);
+
+  if (cachedResult) {
+    // If cached result exists, return it
+    // console.log("Returning data from cache");
+
+    return res.json(JSON.parse(cachedResult));
+  }
+
+  try {
+    const analyticsDoc = await Analytics.find({ topic });
+    if (!analyticsDoc) {
+      return res
+        .status(404)
+        .json({ error: "Analytics not found for this alias" });
+    }
+
+    await redis.set(cacheKey, JSON.stringify(analyticsDoc), "EX", 3600);
+
+    return res.json(analyticsDoc);
+  } catch (error) {
+    console.error("Error retrieving analytics:", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// retrieve overall analytics for user
+
+const retrieveOverallAnalytics = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const userUrls = await URL.find({ createdBy: userId });
+
+    const cacheKey = `alter:analytics:${userId}`;
+
+    const cachedResult = await redis.get(cacheKey);
+
+    if (cachedResult) {
+      // If cached result exists, return it
+      // console.log("Returning data from cache");
+
+      return res.json(JSON.parse(cachedResult));
+    }
+
+    // Step 2: Initialize the aggregate analytics object
+    let totalUrls = userUrls.length;
+    let totalClicks = 0;
+    let uniqueClicks = 0;
+    let clicksByDate = [];
+    let osType = [];
+    let deviceType = [];
+
+    // Step 3: Iterate over each URL to aggregate analytics
+    for (const url of userUrls) {
+      const analytics = await Analytics.findOne({ alias: url.custom_alias });
+
+      // Aggregate total URLs
+      if (analytics) {
+        // Aggregate total clicks and unique clicks
+        totalClicks += analytics.totalClicks;
+        uniqueClicks += analytics.uniqueClicks;
+
+        // Aggregate clicks by date
+        analytics.clicksByDate.forEach((entry) => {
+          const existingDateEntry = clicksByDate.find(
+            (d) => d.date === entry.date
+          );
+          if (existingDateEntry) {
+            existingDateEntry.clickCount += entry.clickCount;
+          } else {
+            clicksByDate.push(entry);
+          }
+        });
+
+        // Aggregate OS type and device type data
+        analytics.osType.forEach((os) => {
+          const existingOs = osType.find((o) => o.osName === os.osName);
+          if (existingOs) {
+            existingOs.uniqueClicks += os.uniqueClicks;
+            existingOs.uniqueUsers += os.uniqueUsers;
+          } else {
+            osType.push(os);
+          }
+        });
+
+        analytics.deviceType.forEach((device) => {
+          const existingDevice = deviceType.find(
+            (d) => d.deviceName === device.deviceName
+          );
+          if (existingDevice) {
+            existingDevice.uniqueClicks += device.uniqueClicks;
+            existingDevice.uniqueUsers += device.uniqueUsers;
+          } else {
+            deviceType.push(device);
+          }
+        });
+      }
+    }
+
+    await redis.set(
+      cacheKey,
+      JSON.stringify({
+        totalUrls,
+        totalClicks,
+        uniqueClicks,
+        clicksByDate: clicksByDate, // Limit to recent 7 days
+        osType,
+        deviceType,
+      }),
+      "EX",
+      3600
+    );
+
+    // Step 4: Return the aggregated data
+    return res.json({
+      totalUrls,
+      totalClicks,
+      uniqueClicks,
+      clicksByDate: clicksByDate, // Limit to recent 7 days
+      osType,
+      deviceType,
+    });
+  } catch (error) {
+    console.error("Error fetching overall analytics:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+module.exports = {
+  generateURLAnalytics,
+  retrieveAnalytics,
+  retrieveAnalyticsTopic,
+  retrieveOverallAnalytics,
+};

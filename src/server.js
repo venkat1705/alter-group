@@ -5,6 +5,7 @@ const authRouter = require("./routes/auth.route");
 const cookieSession = require("cookie-session");
 const URLRouter = require("./routes/url.route");
 const combinedRateLimiter = require("./middleware/ratelimit.middleware");
+const analyticsRouter = require("./routes/analytics.route");
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use(
 app.use(combinedRateLimiter);
 app.set("trust proxy", true), app.use("/api/auth", authRouter);
 app.use("/api", URLRouter);
+app.use("/api", analyticsRouter);
 
 const PORT = process.env.PORT || 5000;
 
