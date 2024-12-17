@@ -37,7 +37,7 @@ const analyticsSchema = new mongoose.Schema(
         country: String,
       },
     ],
-    uniqueIps: { type: [String], default: [] }, // To track unique IPs
+    uniqueIps: [], // To track unique IPs
   },
   { timestamps: true }
 );
