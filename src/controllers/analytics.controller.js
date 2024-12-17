@@ -18,7 +18,7 @@ const retriveAnalytics = async (req, res) => {
     const parsedUA = new UAParser(userAgent);
 
     const analyticsDoc = {
-      ip: data,
+      ip: data.ip,
       osName: parsedUA.getOS().name || "Unknown",
       deviceName: parsedUA.getDevice().type || "desktop",
       date: new Date().toISOString().slice(0, 10),
@@ -38,9 +38,7 @@ const retriveAnalytics = async (req, res) => {
 const recordClick = async (shortUrl, analyticsData, req, alias) => {
   const { ip, osName, deviceName, date } = analyticsData;
 
-  console.log(alias, ip);
-
-  const geoData = await getGeoLocation(ip.ip);
+  const geoData = await getGeoLocation(ip);
 
   try {
     let analyticsDoc = await Analytics.findOne({ short_url: shortUrl });
