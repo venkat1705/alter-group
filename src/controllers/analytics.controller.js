@@ -51,7 +51,7 @@ const recordClick = async (shortUrl, analyticsData, req, alias) => {
         short_url: shortUrl,
         totalClicks: 1,
         uniqueClicks: 1,
-        uniqueIps: [ip],
+        uniqueIps: [ip.ip],
         clicksByDate: [{ date, count: 1 }],
         osType: [{ osName, uniqueClicks: 1, uniqueUsers: 1 }],
         deviceType: [{ deviceName, uniqueClicks: 1, uniqueUsers: 1 }],
